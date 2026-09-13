@@ -1,48 +1,57 @@
+import os
+import asyncio
 import requests
+from flask import Flask, request
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.ext import Application
 
-# التوكن والمفتاح الخاص بك (كما ظهر في الـ cURL)
-TELEGRAM_TOKEN = "8622347113:AAFS2acI-kiIJvrGppytfJB2idJ2pXs9Cxk"
+TOKEN = "8622347113:AAFS2acI-kiIJvrGppytfJB2idJ2pXs9Cxk"
 GEMINI_KEY = "AQ.Ab8RN6I5D9Wi9JuwptTzc0or8SHJOAQKcxcZjA-GhvCL9tk4qg"
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
 
-# تم تعديل الرابط ليتطابق مع اسم النموذج الخاص بك 100%
-URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+app = Flask(__name__)
+application = Application.builder().token(TOKEN).build()
 
-async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_message = update.message.text
-    processing_msg = await update.message.reply_text("أقرأ رسالتك...")
-    
-    try:
-        headers = {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': GEMINI_KEY
-        }
-        data = {
-            "contents": [{
-                "parts": [{"text": user_message}]
-            }]
-        }
-        
-        response = requests.post(URL, headers=headers, json=data)
-        result = response.json()
-        
-        if 'candidates' in result:
-            bot_reply = result['candidates'][0]['content']['parts'][0]['text']
-            await processing_msg.edit_text(bot_reply)
-        else:
-            await processing_msg.edit_text(f"استجابة غير متوقعة:\n{result}")
-            print(f"تفاصيل الخطأ: {result}")
+@app.route('/')
+def index():
+    return "Bot is active and running!"
+
+@app.route(f'/{TOKEN}', methods=['POST'])
+def webhook():
+    json_data = request.get_json()
+    if json_data:
+        update = Update.de_json(json_data, application.bot)
+        asyncio.run(handle_message(update))
+    return 'OK', 200
+
+async def handle_message(update: Update):
+    if update.message and update.message.text:
+        user_message = update.message.text
+        try:
+            headers = {
+                'Content-Type': 'application/json',
+                'x-goog-api-key': GEMINI_KEY
+            }
+            data = {
+                "contents": [{"parts": [{"text": user_message}]}]
+            }
+            response = requests.post(GEMINI_URL, headers=headers, json=data)
+            result = response.json()
             
-    except Exception as e:
-        await processing_msg.edit_text(f"حدث خطأ في الاتصال.")
-        print(f"خطأ تقني: {e}")
-
-def main():
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, auto_reply))
-    print("المساعد الذكي يعمل الآن... بانتظار رسائلك!")
-    app.run_polling()
+            if 'candidates' in result:
+                bot_reply = result['candidates'][0]['content']['parts'][0]['text']
+                await update.message.reply_text(bot_reply)
+            else:
+                await update.message.reply_text(f"استجابة غير متوقعة من السيرفر.")
+        except Exception as e:
+            print(f"Error: {e}")
 
 if __name__ == '__main__':
-    main()
+    # ربط الـ Webhook تلقائياً مع رابط منصة Render الخارجي
+    render_url = os.environ.get('RENDER_EXTERNAL_URL')
+    if render_url:
+        set_url = f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={render_url}/{TOKEN}"
+        requests.get(set_url)
+        
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
