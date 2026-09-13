@@ -28,9 +28,10 @@ async def handle_message(update: Update):
     if update.message and update.message.text:
         user_message = update.message.text
         try:
+            # التعديل الجذري هنا: استخدام نظام Bearer ليتوافق مع نوع المفتاح الخاص بك
             headers = {
                 'Content-Type': 'application/json',
-                'x-goog-api-key': GEMINI_KEY
+                'Authorization': f'Bearer {GEMINI_KEY}'
             }
             data = {
                 "contents": [{"parts": [{"text": user_message}]}]
@@ -38,14 +39,10 @@ async def handle_message(update: Update):
             response = requests.post(GEMINI_URL, headers=headers, json=data)
             result = response.json()
             
-            # طباعة الرد كاملاً في سجلات Render للتحقق
-            print(f"Gemini Response: {result}")
-            
             if 'candidates' in result:
                 bot_reply = result['candidates'][0]['content']['parts'][0]['text']
                 await update.message.reply_text(bot_reply)
             else:
-                # إرسال الخطأ الحرفي من جوجل إلى تليجرام لنعرف السبب فوراً
                 await update.message.reply_text(f"خطأ من جوجل:\n{str(result)}")
         except Exception as e:
             await update.message.reply_text(f"خطأ تقني: {str(e)}")
