@@ -4,10 +4,14 @@ import requests
 from flask import Flask, request
 from telegram import Update
 from telegram.ext import Application
+from google import genai
 
 TOKEN = "8622347113:AAFS2acI-kiIJvrGppytfJB2idJ2pXs9Cxk"
-GEMINI_KEY = "AQ.Ab8RN6I5D9Wi9JuwptTzc0or8SHJOAQKcxcZjA-GhvCL9tk4qg"
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+# مفتاحك الجديد بصيغة AQ
+GEMINI_KEY = "AQ.Ab8RN6K_-zmPkAcSjVPQXjM4TmH6yunAjFQYrgb3Cw2OblCBPg"
+
+# تهيئة عميل جوجل الرسمي (الذي يدعم مفاتيح AQ الجديدة)
+client = genai.Client(api_key=GEMINI_KEY)
 
 app = Flask(__name__)
 application = Application.builder().token(TOKEN).build()
@@ -28,22 +32,13 @@ async def handle_message(update: Update):
     if update.message and update.message.text:
         user_message = update.message.text
         try:
-            # التعديل الجذري هنا: استخدام نظام Bearer ليتوافق مع نوع المفتاح الخاص بك
-            headers = {
-                'Content-Type': 'application/json',
-                'Authorization': f'Bearer {GEMINI_KEY}'
-            }
-            data = {
-                "contents": [{"parts": [{"text": user_message}]}]
-            }
-            response = requests.post(GEMINI_URL, headers=headers, json=data)
-            result = response.json()
-            
-            if 'candidates' in result:
-                bot_reply = result['candidates'][0]['content']['parts'][0]['text']
-                await update.message.reply_text(bot_reply)
-            else:
-                await update.message.reply_text(f"خطأ من جوجل:\n{str(result)}")
+            # استخدام المكتبة الرسمية لجوجل لتوليد الرد
+            response = client.models.generate_content(
+                model='gemini-2.5-flash',
+                contents=user_message,
+            )
+            bot_reply = response.text
+            await update.message.reply_text(bot_reply)
         except Exception as e:
             await update.message.reply_text(f"خطأ تقني: {str(e)}")
 
