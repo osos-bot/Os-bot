@@ -38,16 +38,19 @@ async def handle_message(update: Update):
             response = requests.post(GEMINI_URL, headers=headers, json=data)
             result = response.json()
             
+            # طباعة الرد كاملاً في سجلات Render للتحقق
+            print(f"Gemini Response: {result}")
+            
             if 'candidates' in result:
                 bot_reply = result['candidates'][0]['content']['parts'][0]['text']
                 await update.message.reply_text(bot_reply)
             else:
-                await update.message.reply_text(f"استجابة غير متوقعة من السيرفر.")
+                # إرسال الخطأ الحرفي من جوجل إلى تليجرام لنعرف السبب فوراً
+                await update.message.reply_text(f"خطأ من جوجل:\n{str(result)}")
         except Exception as e:
-            print(f"Error: {e}")
+            await update.message.reply_text(f"خطأ تقني: {str(e)}")
 
 if __name__ == '__main__':
-    # ربط الـ Webhook تلقائياً مع رابط منصة Render الخارجي
     render_url = os.environ.get('RENDER_EXTERNAL_URL')
     if render_url:
         set_url = f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={render_url}/{TOKEN}"
