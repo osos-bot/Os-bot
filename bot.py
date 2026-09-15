@@ -1,18 +1,12 @@
 import os
-import asyncio
 import requests
 from flask import Flask, request
-from telegram import Update
-from telegram.ext import Application
 
 TOKEN = "8622347113:AAFS2acI-kiIJvrGppytfJB2idJ2pXs9Cxk"
-# مفتاحك الصحيح تم وضعه هنا
 GEMINI_KEY = "AIzaSyDGMpZOBcP41JfkgYCYOAdtss69ioNqc4U"
-# استخدام نموذج gemini-1.5-flash لسرعة واستقرار أعلى
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
 
 app = Flask(__name__)
-application = Application.builder().token(TOKEN).build()
 
 @app.route('/')
 def index():
@@ -20,16 +14,15 @@ def index():
 
 @app.route(f'/{TOKEN}', methods=['POST'])
 def webhook():
-    json_data = request.get_json()
-    if json_data:
-        update = Update.de_json(json_data, application.bot)
-        asyncio.run(handle_message(update))
-    return 'OK', 200
-
-async def handle_message(update: Update):
-    if update.message and update.message.text:
-        user_message = update.message.text
+    update = request.get_json()
+    
+    # التأكد من أن التحديث يحتوي على رسالة نصية من المستخدم
+    if update and "message" in update and "text" in update["message"]:
+        chat_id = update["message"]["chat"]["id"]
+        user_message = update["message"]["text"]
+        
         try:
+            # 1. إرسال رسالة المستخدم إلى جيميني
             headers = {
                 'Content-Type': 'application/json',
                 'x-goog-api-key': GEMINI_KEY
@@ -40,15 +33,26 @@ async def handle_message(update: Update):
             response = requests.post(GEMINI_URL, headers=headers, json=data)
             result = response.json()
             
+            # 2. استخراج الرد من جيميني
             if 'candidates' in result:
                 bot_reply = result['candidates'][0]['content']['parts'][0]['text']
-                await update.message.reply_text(bot_reply)
             else:
-                await update.message.reply_text(f"استجابة غير متوقعة:\n{str(result)}")
+                bot_reply = f"استجابة غير متوقعة من جيميني:\n{str(result)}"
+                
         except Exception as e:
-            await update.message.reply_text(f"خطأ تقني: {str(e)}")
+            bot_reply = f"خطأ في الاتصال بجيميني: {str(e)}"
+
+        # 3. إرسال الرد إلى المستخدم في تليجرام مباشرة
+        try:
+            tg_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+            requests.post(tg_url, json={"chat_id": chat_id, "text": bot_reply})
+        except Exception as e:
+            print(f"Error sending to Telegram: {e}")
+
+    return 'OK', 200
 
 if __name__ == '__main__':
+    # ربط الـ Webhook مع تليجرام تلقائياً عند التشغيل
     render_url = os.environ.get('RENDER_EXTERNAL_URL')
     if render_url:
         set_url = f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={render_url}/{TOKEN}"
