@@ -4,7 +4,7 @@ from flask import Flask, request
 
 TOKEN = "8622347113:AAFS2acI-kiIJvrGppytfJB2idJ2pXs9Cxk"
 
-# Paste your OpenRouter API key here
+# Replace with your actual OpenRouter API key (e.g., sk-or-v1-...)
 OPENROUTER_API_KEY = "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"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -30,9 +30,9 @@ def webhook():
                 "X-Title": "Telegram Bot"
             }
             
-            # Using Nex-N2.5-Pro (Free)
+            # Exact model slug from OpenRouter
             data = {
-                "model": "nex/nex-n2.5-pro:free",
+                "model": "nex-agi/nex-n2.5-pro:free",
                 "messages": [
                     {"role": "user", "content": user_message}
                 ]
