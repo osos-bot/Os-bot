@@ -32,7 +32,7 @@ def webhook():
             
                  # استخدام نموذج مجاني ومستقر يدعم العربية
             data = {
-                "model": "meta-llama/llama-3.1-8b-instruct:free",
+                "model": "meta-llama/llama-3.3-70b-instruct:free",
                 "messages": [
                     {"role": "user", "content": user_message}
                 ]
