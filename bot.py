@@ -26,23 +26,21 @@ def webhook():
             headers = {
                 "Authorization": f"Bearer {OPENROUTER_API_KEY}",
                 "Content-Type": "application/json",
-                "HTTP-Referer": "https://github.com", # Optional: Required by OpenRouter for ranking
-                "X-Title": "Telegram Bot"             # Optional: App name
+                "HTTP-Referer": "https://github.com",
+                "X-Title": "Telegram Bot"
             }
             
-                 # استخدام نموذج مجاني ومستقر يدعم العربية
+            # Using Nex-N2.5-Pro (Free)
             data = {
-                "model": "meta-llama/llama-3.3-70b-instruct:free",
+                "model": "nex-ai/nex-n2.5-pro:free",
                 "messages": [
                     {"role": "user", "content": user_message}
                 ]
             }
-
             
             response = requests.post(OPENROUTER_URL, headers=headers, json=data)
             result = response.json()
             
-            # Extract the AI's reply from the OpenAI-compatible response format
             if 'choices' in result and len(result['choices']) > 0:
                 bot_reply = result['choices'][0]['message']['content']
             else:
@@ -51,7 +49,6 @@ def webhook():
         except Exception as e:
             bot_reply = f"Connection error: {str(e)}"
 
-        # Send the reply back to Telegram
         try:
             tg_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
             requests.post(tg_url, json={"chat_id": chat_id, "text": bot_reply})
