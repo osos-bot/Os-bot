@@ -3,9 +3,10 @@ import requests
 from flask import Flask, request
 
 TOKEN = "8622347113:AAFS2acI-kiIJvrGppytfJB2idJ2pXs9Cxk"
-# Your new AIza key
-GEMINI_KEY = "AIzaSyCySeXRK2jFm-foUsdFNLbIhVQCJ0ok49A"
-GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+
+# Paste your OpenRouter API key here
+OPENROUTER_API_KEY = "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"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 app = Flask(__name__)
 
@@ -23,23 +24,33 @@ def webhook():
         
         try:
             headers = {
-                'Content-Type': 'application/json',
-                'x-goog-api-key': GEMINI_KEY
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com", # Optional: Required by OpenRouter for ranking
+                "X-Title": "Telegram Bot"             # Optional: App name
             }
+            
+            # Using Gemini 1.5 Flash through OpenRouter
             data = {
-                "contents": [{"parts": [{"text": user_message}]}]
+                "model": "google/gemini-flash-1.5",
+                "messages": [
+                    {"role": "user", "content": user_message}
+                ]
             }
-            response = requests.post(GEMINI_URL, headers=headers, json=data)
+            
+            response = requests.post(OPENROUTER_URL, headers=headers, json=data)
             result = response.json()
             
-            if 'candidates' in result:
-                bot_reply = result['candidates'][0]['content']['parts'][0]['text']
+            # Extract the AI's reply from the OpenAI-compatible response format
+            if 'choices' in result and len(result['choices']) > 0:
+                bot_reply = result['choices'][0]['message']['content']
             else:
                 bot_reply = f"Unexpected response:\n{str(result)}"
                 
         except Exception as e:
             bot_reply = f"Connection error: {str(e)}"
 
+        # Send the reply back to Telegram
         try:
             tg_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
             requests.post(tg_url, json={"chat_id": chat_id, "text": bot_reply})
