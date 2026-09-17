@@ -30,13 +30,14 @@ def webhook():
                 "X-Title": "Telegram Bot"             # Optional: App name
             }
             
-            # Using Gemini 1.5 Flash through OpenRouter with the corrected model name
+                 # استخدام نموذج مجاني ومستقر يدعم العربية
             data = {
-                "model": "google/gemini-1.5-flash",
+                "model": "meta-llama/llama-3.1-8b-instruct:free",
                 "messages": [
                     {"role": "user", "content": user_message}
                 ]
             }
+
             
             response = requests.post(OPENROUTER_URL, headers=headers, json=data)
             result = response.json()
