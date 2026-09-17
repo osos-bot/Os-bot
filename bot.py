@@ -30,9 +30,9 @@ def webhook():
                 "X-Title": "Telegram Bot"             # Optional: App name
             }
             
-            # Using Gemini 1.5 Flash through OpenRouter
+            # Using Gemini 1.5 Flash through OpenRouter with the corrected model name
             data = {
-                "model": "google/gemini-flash-1.5",
+                "model": "google/gemini-1.5-flash",
                 "messages": [
                     {"role": "user", "content": user_message}
                 ]
