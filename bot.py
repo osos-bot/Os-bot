@@ -32,7 +32,7 @@ def webhook():
             
             # Using Nex-N2.5-Pro (Free)
             data = {
-                "model": "nex-ai/nex-n2.5-pro:free",
+                "model": "nex/nex-n2.5-pro:free",
                 "messages": [
                     {"role": "user", "content": user_message}
                 ]
