@@ -1,132 +1,137 @@
 import os
 import requests
 import base64
-from flask import Flask, request
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
-TOKEN = "8622347113:AAFS2acI-kiIJvrGppytfJB2idJ2pXs9Cxk"
+TELEGRAM_BOT_TOKEN = os.getenv("8622347113:AAFS2acI-kiIJvrGppytfJB2idJ2pXs9Cxk", "8622347113:AAFS2acI-kiIJvrGppytfJB2idJ2pXs9Cxk")
+OPENROUTER_API_KEY = os.getenv("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", "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")
 
-OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY", "YOUR_OPENROUTER_API_KEY_HERE")
-OPENROUTER_CHAT_URL = "https://openrouter.ai/api/v1/chat/completions"
-OPENROUTER_STT_URL = "https://openrouter.ai/api/v1/audio/transcriptions"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
-app = Flask(__name__)
+# Selected Free Models
+MODEL_TEXT = "nvidia/nemotron-3-ultra-550b-a55b:free"
+MODEL_VISION = "google/gemma-4-31b-it:free"
+MODEL_AUDIO = "thinkingmachines/inkling:free"
 
-def fetch_telegram_file_bytes(file_id):
-    """Retrieves file path from Telegram and downloads raw file bytes."""
-    file_info = requests.get(f"https://api.telegram.org/bot{TOKEN}/getFile?file_id={file_id}").json()
-    if file_info.get("ok"):
-        file_path = file_info["result"]["file_path"]
-        download_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_path}"
-        response = requests.get(download_url)
-        return response.content
-    return None
-
-@app.route('/')
-def index():
-    return "Bot is active and running!"
-
-@app.route(f'/{TOKEN}', methods=['POST'])
-def webhook():
-    update = request.get_json()
+def get_headers():
+    if not OPENROUTER_API_KEY or OPENROUTER_API_KEY == "YOUR_OPENROUTER_API_KEY":
+        raise ValueError("OPENROUTER_API_KEY is missing. Export it in your environment or set it directly in code.")
     
-    if update and "message" in update:
-        message = update["message"]
-        chat_id = message["chat"]["id"]
-        bot_reply = ""
+    return {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY.strip()}",
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://github.com",
+        "X-Title": "TelegramBot"
+    }
 
-        try:
-            headers = {
-                "Authorization": f"Bearer {OPENROUTER_API_KEY.strip()}",
-                "Content-Type": "application/json",
-                "HTTP-Referer": "https://github.com",
-                "X-Title": "Telegram Bot"
-            }
-
-            # 1. TEXT MESSAGES
-            if "text" in message:
-                user_text = message["text"]
-                data = {
-                    "model": "nex-agi/nex-n2.5-pro:free",
-                    "messages": [{"role": "user", "content": user_text}]
-                }
-                res = requests.post(OPENROUTER_CHAT_URL, headers=headers, json=data).json()
-                bot_reply = res.get('choices', [{}])[0].get('message', {}).get('content', str(res))
-
-            # 2. IMAGE / PHOTO PROCESSING
-            elif "photo" in message:
-                caption = message.get("caption", "Describe what is in this image.")
-                file_id = message["photo"][-1]["file_id"]  # Select highest resolution image
-                file_bytes = fetch_telegram_file_bytes(file_id)
-                
-                if file_bytes:
-                    base64_img = base64.b64encode(file_bytes).decode('utf-8')
-                    image_uri = f"data:image/jpeg;base64,{base64_img}"
-
-                    data = {
-                        "model": "google/gemini-2.0-flash-exp:free",  # Multimodal vision model
-                        "messages": [
-                            {
-                                "role": "user",
-                                "content": [
-                                    {"type": "text", "text": caption},
-                                    {"type": "image_url", "image_url": {"url": image_uri}}
-                                ]
-                            }
-                        ]
-                    }
-                    res = requests.post(OPENROUTER_CHAT_URL, headers=headers, json=data).json()
-                    bot_reply = res.get('choices', [{}])[0].get('message', {}).get('content', str(res))
-                else:
-                    bot_reply = "Could not download image from Telegram."
-
-            # 3. VOICE NOTE / AUDIO PROCESSING
-            elif "voice" in message or "audio" in message:
-                voice_obj = message.get("voice") or message.get("audio")
-                file_id = voice_obj["file_id"]
-                file_bytes = fetch_telegram_file_bytes(file_id)
-
-                if file_bytes:
-                    raw_base64_audio = base64.b64encode(file_bytes).decode('utf-8')
-                    
-                    # Transcribe voice to text via Whisper
-                    stt_payload = {
-                        "model": "openai/whisper-large-v3:free",
-                        "input_audio": {
-                            "data": raw_base64_audio,
-                            "format": "ogg"
-                        }
-                    }
-                    stt_res = requests.post(OPENROUTER_STT_URL, headers=headers, json=stt_payload).json()
-                    transcript = stt_res.get("text", "")
-
-                    if transcript:
-                        # Process transcribed text through AI model
-                        chat_data = {
-                            "model": "nex-agi/nex-n2.5-pro:free",
-                            "messages": [{"role": "user", "content": transcript}]
-                        }
-                        res = requests.post(OPENROUTER_CHAT_URL, headers=headers, json=chat_data).json()
-                        ai_answer = res.get('choices', [{}])[0].get('message', {}).get('content', str(res))
-                        bot_reply = f"🎤 *Transcript:* \"{transcript}\"\n\n🤖 *AI:* {ai_answer}"
-                    else:
-                        bot_reply = f"Voice transcription failed:\n{str(stt_res)}"
-                else:
-                    bot_reply = "Could not download voice note from Telegram."
-
-        except Exception as e:
-            bot_reply = f"Processing error: {str(e)}"
-
-        if bot_reply:
-            tg_url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
-            requests.post(tg_url, json={"chat_id": chat_id, "text": bot_reply})
-
-    return 'OK', 200
-
-if __name__ == '__main__':
-    render_url = os.environ.get('RENDER_EXTERNAL_URL')
-    if render_url:
-        set_url = f"https://api.telegram.org/bot{TOKEN}/setWebhook?url={render_url}/{TOKEN}"
-        requests.get(set_url)
+# 1. Text & Chat Handler
+async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    payload = {
+        "model": MODEL_TEXT,
+        "messages": [{"role": "user", "content": update.message.text}]
+    }
+    
+    try:
+        res = requests.post(OPENROUTER_URL, headers=get_headers(), json=payload)
+        data = res.json()
         
-    port = int(os.environ.get('PORT', 10000))
-    app.run(host='0.0.0.0', port=port)
+        if res.status_code == 200:
+            reply = data['choices'][0]['message']['content']
+            await update.message.reply_text(reply)
+        else:
+            await update.message.reply_text(f"API Error {res.status_code}: {data.get('error', {}).get('message')}")
+    except Exception as e:
+        await update.message.reply_text(f"System Error: {str(e)}")
+
+# 2. Image Analysis Handler (Vision)
+async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    photo_file = await update.message.photo[-1].get_file()
+    photo_bytes = await photo_file.download_as_bytearray()
+    base64_image = base64.b64encode(photo_bytes).decode('utf-8')
+    caption = update.message.caption or "Describe this image in detail."
+
+    payload = {
+        "model": MODEL_VISION,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": caption},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/jpeg;base64,{base64_image}"}
+                    }
+                ]
+            }
+        ]
+    }
+    
+    try:
+        res = requests.post(OPENROUTER_URL, headers=get_headers(), json=payload)
+        data = res.json()
+        
+        if res.status_code == 200:
+            reply = data['choices'][0]['message']['content']
+            await update.message.reply_text(reply)
+        else:
+            await update.message.reply_text(f"API Error {res.status_code}: {data.get('error', {}).get('message')}")
+    except Exception as e:
+        await update.message.reply_text(f"System Error: {str(e)}")
+
+# 3. Audio & Voice Analysis Handler
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    voice_file = await update.message.voice.get_file()
+    voice_bytes = await voice_file.download_as_bytearray()
+    base64_audio = base64.b64encode(voice_bytes).decode('utf-8')
+
+    payload = {
+        "model": MODEL_AUDIO,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "Listen to this audio and transcribe or answer it."},
+                    {
+                        "type": "input_audio",
+                        "input_audio": {"data": base64_audio, "format": "ogg"}
+                    }
+                ]
+            }
+        ]
+    }
+
+    try:
+        res = requests.post(OPENROUTER_URL, headers=get_headers(), json=payload)
+        data = res.json()
+
+        if res.status_code == 200:
+            reply = data['choices'][0]['message']['content']
+            await update.message.reply_text(reply)
+        else:
+            await update.message.reply_text(f"API Error {res.status_code}: {data.get('error', {}).get('message')}")
+    except Exception as e:
+        await update.message.reply_text(f"System Error: {str(e)}")
+
+# 4. Image Generation Command (/generate <prompt>)
+async def handle_generate_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    prompt = " ".join(context.args)
+    if not prompt:
+        await update.message.reply_text("Usage: /generate <image description>")
+        return
+        
+    encoded_prompt = requests.utils.quote(prompt)
+    image_url = f"https://image.pollinations.ai/prompt/{encoded_prompt}"
+    
+    await update.message.reply_photo(photo=image_url, caption=f"Prompt: {prompt}")
+
+if __name__ == "__main__":
+    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
+    
+    app.add_handler(CommandHandler("generate", handle_generate_image))
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
+    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    
+    print("Bot is active...")
+    app.run_polling()
